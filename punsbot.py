@@ -15,7 +15,7 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.6.3"
+version = "0.7.0"
 required_validations = 5
 
 if 'TOKEN' not in os.environ:
@@ -156,15 +156,15 @@ def find_pun(message="", dbfile='puns.db'):
 
 @bot.message_handler(commands=['punshelp', 'help'])
 def help(message):
-    helpmessage = '''Those are the commands available
-    /punadd         Add a new pun (trigger|pun)
-    /pundel         Delete an existing pun (uuid)
-    /punlist        Lists all the puns for this chat (/list or /punslist)
-    /punapprove     Give +1 to a pun
-    /punban         Give -1 to a pun
-    /punsilence     Stop puns for specified minutes
-    /punset         Set the probability of answering with a pun (1-100)
-    /punshelp       This help (/help)
+    helpmessage = '''Estos son los comandos disponibles:
+    /punadd         Agregar una nueva rima
+    /pundel         Borrar una rima (uuid)
+    /punlist        Lista todas las rimas para este chat (/list o /punlist)
+    /punapprove     Votar +1 a una rima
+    /punban         Votar -1 a una rima
+    /punsilence     Silenciar rimas durante un periodo de tiempo (minutos)
+    /punset         Ajustar la probabilidad de rimar a un mensaje (1 a 100)
+    /punshelp       Esta ayuda (/help)
 
     ** PunsBot muted on this channel until %s  **
     ** Probability of answering with a pun: %s%% **
@@ -183,7 +183,7 @@ def approve(message):
     global punsdb
     quote = message.text.replace('/punapprove', '').strip()
     if quote == '':
-        bot.reply_to(message, 'Missing uuid to approve or invalid syntax: \"/punapprove \"pun uuid\"')
+        bot.reply_to(message, 'Uuid no encontrado o sintaxis incorrecta: \"/punapprove \"pun uuid\"')
         return
     db = sqlite3.connect(punsdb)
     cursor = db.cursor()
@@ -193,12 +193,12 @@ def approve(message):
     else:
         answer = cursor.execute('''SELECT count(punid) FROM validations WHERE chatid = ? AND punid = ? AND userid = ? and karma = 1''', (message.chat.id, quote.strip(), message.from_user.id)).fetchone()
         if answer[0] >= 1:
-            bot.reply_to(message, 'You have already approved ' + quote + '. Only one approve by user is allowed.')
+            bot.reply_to(message, 'Ya has votado +1 a la rima ' + quote + '. Solo se permite un voto +1 por usuario.')
         else:
             cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,1)''', (quote.strip(), message.chat.id, message.from_user.id))
             db.commit()
             answer = cursor.execute('''SELECT SUM(karma) FROM validations WHERE chatid = ? AND punid = ?''', (message.chat.id, quote.strip())).fetchone()
-            bot.reply_to(message, 'Thanks for approve ' + quote.strip() + '. Pun karma is ' + str(answer[0]))
+            bot.reply_to(message, 'Gracias por votar a la rima ' + quote.strip() + '. Puntuación actual: ' + str(answer[0]))
     db.close()
     return
 
@@ -209,7 +209,7 @@ def ban(message):
     global punsdb
     quote = message.text.replace('/punban', '').strip()
     if quote == '':
-        bot.reply_to(message, 'Missing uuid to ban or invalid syntax: \"/punban \"pun uuid\"')
+        bot.reply_to(message, 'Uuid no encontrado o sintaxis incorrecta: \"/punban \"pun uuid\"')
         return
     db = sqlite3.connect(punsdb)
     cursor = db.cursor()
@@ -219,12 +219,12 @@ def ban(message):
     else:
         answer = cursor.execute('''SELECT count(punid) FROM validations WHERE chatid = ? AND punid = ? AND userid = ? and karma = -1''', (message.chat.id, quote.strip(), message.from_user.id)).fetchone()
         if answer[0] >= 1:
-            bot.reply_to(message, 'You have already ban ' + quote + '. Only one ban by user is allowed.')
+            bot.reply_to(message, 'Ya has votado -1 a la rima ' + quote + '. Solo se permite un voto -1 por usuario.')
         else:
             cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,-1)''', (quote.strip(), message.chat.id, message.from_user.id))
             db.commit()
             answer = cursor.execute('''SELECT SUM(karma) FROM validations WHERE chatid = ? AND punid = ?''', (message.chat.id, quote.strip())).fetchone()
-            bot.reply_to(message, 'Thanks for ban ' + quote.strip() + '. Pun karma is ' + str(answer[0]))
+            bot.reply_to(message, 'Gracias por votar a la rima ' + quote.strip() + '. Puntuación actual: ' + str(answer[0]))
     db.close()
     return
 
@@ -235,15 +235,15 @@ def add(message):
     global punsdb
     quote = message.text.replace('/punadd', '')
     if quote == '' or len(quote.split('|')) != 2:
-        bot.reply_to(message, 'Missing pun or invalid syntax: \"/punadd \"pun trigger\"|\"pun\"')
+        bot.reply_to(message, 'Uuid no encontrado o sintaxis incorrecta: \"/punadd \"pun trigger\"|\"pun\"')
         return
     trigger = quote.split('|')[0].strip()
     for character in trigger:
         if character not in allowed_chars_triggers:
-            bot.reply_to(message, 'Invalid character ' + character + ' in trigger, only letters and numbers are allowed')
+            bot.reply_to(message, 'Caracter invalido encontrado ' + character + '. Solo se permiten letras y/o numeros')
             return
     if not is_valid_regex(trigger):
-        bot.reply_to(message, 'Not valid regex ' + trigger + ' defined as trigger ')
+        bot.reply_to(message, 'No es una expresion regex valida: ' + trigger)
         return
     pun = quote.split('|')[1].strip()
     db = sqlite3.connect(punsdb)

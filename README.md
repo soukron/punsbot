@@ -2,16 +2,7 @@
 [![GitHub release](https://img.shields.io/github/release/morenod/punsbot.svg)]()
 [![license](https://img.shields.io/github/license/morenod/punsbot.svg)]()
 ###### Docker Image
-[![](https://images.microbadger.com/badges/image/gotrunks/punsbot:0.4.0.svg)](https://microbadger.com/images/gotrunks/punsbot:0.4.0 "Get your own image badge on microbadger.com")
-[![](https://images.microbadger.com/badges/version/gotrunks/punsbot:0.4.0.svg)](https://microbadger.com/images/gotrunks/punsbot:0.4.0 "Get your own version badge on microbadger.com")
-[![Docker Automated buil](https://img.shields.io/docker/automated/gotrunks/punsbot.svg)]()
-[![Docker Build Statu](https://img.shields.io/docker/build/gotrunks/punsbot.svg)]()
-[![Docker Stars](https://img.shields.io/docker/stars/gotrunks/punsbot.svg)]()
-[![Docker Pulls](https://img.shields.io/docker/pulls/gotrunks/punsbot.svg)]()
-###### Travis CI
-Master: [![Build Status](https://travis-ci.org/morenod/punsBot.svg?branch=master)](https://travis-ci.org/morenod/punsBot)
-
-Develop: [![Build Status](https://travis-ci.org/morenod/punsBot.svg?branch=develop)](https://travis-ci.org/morenod/punsBot)
+[![Docker Repository on Quay](https://quay.io/repository/soukron/punsbot/status "Docker Repository on Quay")](https://quay.io/repository/soukron/punsbot)
 # PunsBot
 
 A very extended Spanish tradition is about to make puns when talking to a somebody using the last word of a sentence.
