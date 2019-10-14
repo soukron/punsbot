@@ -15,8 +15,9 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.7.0"
+version = "0.7.1"
 required_validations = 5
+default_listing = 10
 
 if 'TOKEN' not in os.environ:
     print("missing TOKEN.Leaving...")
@@ -329,19 +330,44 @@ def set(message):
 
 @bot.message_handler(commands=['list', 'punlist', 'punslist'])
 def list(message):
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    keyboard.row(
+        telebot.types.InlineKeyboardButton('Globales', callback_data='list-global-0'),
+        telebot.types.InlineKeyboardButton('Locales', callback_data='list-local-0')
+    )
+    bot.send_message(message.chat.id, 'Elige qué rimas quieres ver:', reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def iq_callback(query):
+   data = query.data
+   if data.startswith('list-'):
+       list_callback(query)
+   elif data.startswith('cancel'):
+       bot.answer_callback_query(query.id)
+       bot.send_message(query.message.chat.id, 'Ok, cancelando.')
+   
+
+def list_callback(query):
     index = "| uuid | status (karma) | trigger | pun\n"
     puns_list = ""
+
+    [query_verb, query_scope, query_offset] = query.data.split('-')
+
     global punsdb
     db = sqlite3.connect(punsdb)
     cursor = db.cursor()
-    answer = cursor.execute('''SELECT * from puns WHERE (chatid = ? OR chatid = 0) ORDER BY chatid''', (message.chat.id,)).fetchall()
-    db.commit()
-    for i in answer:
-        validations = cursor.execute('''SELECT SUM(validations.karma) FROM puns,validations WHERE puns.chatid = ? AND puns.uuid = ? AND puns.uuid == validations.punid AND puns.chatid = validations.chatid''', (message.chat.id, i[0],)).fetchone()
-        if str(i[1]) == '0':
+    if (query.data.startswith("list-global")):
+        answer = cursor.execute('''SELECT * from puns WHERE chatid = 0 LIMIT ? OFFSET ?''', (default_listing, query_offset,)).fetchall()
+        db.commit()
+        for i in answer:
             puns_list += "| default pun | always enabled | " + str(i[2]) + " | " + str(i[3]) + "\n"
-        else:
-            if bot.get_chat_members_count(message.chat.id) >= required_validations:
+    elif (query.data.startswith("list-local")):
+        answer = cursor.execute('''SELECT * from puns WHERE chatid = ? LIMIT ? OFFSET ?''', (default_listing, query.message.chat.id, query_offset,)).fetchall()
+        db.commit()
+        for i in answer:
+            validations = cursor.execute('''SELECT SUM(validations.karma) FROM puns,validations WHERE puns.chatid = ? AND puns.uuid = ? AND puns.uuid == validations.punid AND puns.chatid = validations.chatid''', (query.message.chat.id, i[0],)).fetchone()
+            if bot.get_chat_members_count(query.message.chat.id) >= required_validations:
                 if validations[0] >= required_validations:
                     puns_list += "| " + str(i[0]) + " | enabled (" + str(validations[0]) + "/" + str(required_validations) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
                 else:
@@ -351,19 +377,18 @@ def list(message):
                     puns_list += "| " + str(i[0]) + " | enabled (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
                 else:
                     puns_list += "| " + str(i[0]) + " | disabled (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
-    if len(puns_list) > 4000:
-        entries = puns_list.split('\n')
-        output = ""
-        for i in entries:
-            if len(index + output + i + '\n') > 4000:
-                bot.reply_to(message, index + output)
-                output = i + '\n'
-            else:
-                output = output + i + '\n'
-        bot.reply_to(message, index + output)
-    else:
-        bot.reply_to(message, index + puns_list)
     db.close()
+
+    bot.answer_callback_query(query.id)
+    bot.send_message(query.message.chat.id, index + puns_list)
+    if len(answer) == default_listing:
+        keyboard = telebot.types.InlineKeyboardMarkup()
+        keyboard.row(
+            telebot.types.InlineKeyboardButton('Sí', callback_data='-'.join([query_verb, query_scope, str(int(query_offset) + default_listing)])),
+            telebot.types.InlineKeyboardButton('No', callback_data='cancel')
+        )
+        bot.send_message(query.message.chat.id, 'Quieres ver más?', reply_markup=keyboard)
+
     return
 
 
