@@ -15,7 +15,7 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.7.1"
+version = "0.8.0-beta1"
 required_validations = 5
 default_listing = 10
 
@@ -87,7 +87,7 @@ def silence_until(chatid=""):
     db = sqlite3.connect(punsdb)
     cursor = db.cursor()
     answer = cursor.execute('''SELECT silence from chatoptions where chatid = ?''', (chatid,)).fetchone()
-    return str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(answer[0]))) if answer is not None and answer[0] is not None and int(time.time()) < int(answer[0]) else "Never"
+    return str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(answer[0]))) if answer is not None and answer[0] is not None and int(time.time()) < int(answer[0]) else "nunca"
 
 
 def load_chat_options(chatid=""):
@@ -155,36 +155,40 @@ def find_pun(message="", dbfile='puns.db'):
         return None if answer_list == [] else random.choice(answer_list)
 
 
-@bot.message_handler(commands=['punshelp', 'help'])
+@bot.message_handler(commands=['ayuda', 'help'])
 def help(message):
-    helpmessage = '''Estos son los comandos disponibles:
-    /punadd         Agregar una nueva rima
-    /pundel         Borrar una rima (uuid)
-    /punlist        Lista todas las rimas para este chat (/list o /punlist)
-    /punapprove     Votar +1 a una rima
-    /punban         Votar -1 a una rima
-    /punsilence     Silenciar rimas durante un periodo de tiempo (minutos)
-    /punset         Ajustar la probabilidad de rimar a un mensaje (1 a 100)
-    /punshelp       Esta ayuda (/help)
+    if bot.get_chat_members_count(message.chat.id) >= required_validations:
+        karma_message='''Las rimas necesitan más de %s puntos de karma para estar activas en este canal''' % (required_validations)
+    else:
+        karma_message='''Las rimas necesitan karma positivo para estar activas en este canal'''
 
-    ** PunsBot muted on this channel until %s  **
-    ** Probability of answering with a pun: %s%% **
+    helpmessage = '''ℹ Estos son los comandos disponibles:
+    /agregar - Agregar una rima
+    /borrar - Borrar una rima
+    /listar - Lista todas las rimas para este chat
+    /secundar - Dar karma a una rima
+    /rechazar - Dar o quitar karma a una rima
+    /silenciar - Silenciar rimas durante un periodo de tiempo
+    /ajustar - Ajustar la probabilidad de rimar a los mensajes
+    /help o /ayuda - Mostar esta ayuda
 
-    Puns will be enabled if karma is over %s on groups with more than %s people.
-    On groups with less people, only positive karma is required
+⚙ Configuración dctual
+  - Rimas silenciadas en este canal hasta: %s.
+  - Probabilidad de contestar a una rima: %s%%.
+  - %s.
 
-    Version: %s
-    ''' % (silence_until(message.chat.id), efectivity(message.chat.id), required_validations, required_validations, version)
+Version: %s
+    ''' % (silence_until(message.chat.id), efectivity(message.chat.id), karma_message, version)
     bot.reply_to(message, helpmessage)
 
 
-@bot.message_handler(commands=['punapprove'])
+@bot.message_handler(commands=['secundar'])
 def approve(message):
     global triggers
     global punsdb
-    quote = message.text.replace('/punapprove', '').strip()
+    quote = message.text.replace('/secundar', '').strip()
     if quote == '':
-        bot.reply_to(message, 'Uuid no encontrado o sintaxis incorrecta: \"/punapprove \"pun uuid\"')
+        bot.reply_to(message, 'UUID no encontrado o sintaxis incorrecta: \"/secundar \"UUID\"')
         return
     db = sqlite3.connect(punsdb)
     cursor = db.cursor()
@@ -194,23 +198,23 @@ def approve(message):
     else:
         answer = cursor.execute('''SELECT count(punid) FROM validations WHERE chatid = ? AND punid = ? AND userid = ? and karma = 1''', (message.chat.id, quote.strip(), message.from_user.id)).fetchone()
         if answer[0] >= 1:
-            bot.reply_to(message, 'Ya has votado +1 a la rima ' + quote + '. Solo se permite un voto +1 por usuario.')
+            bot.reply_to(message, 'Ya has secundado a la rima ' + quote + '. Solo se permite hacerlo una vez por usuario.')
         else:
             cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,1)''', (quote.strip(), message.chat.id, message.from_user.id))
             db.commit()
             answer = cursor.execute('''SELECT SUM(karma) FROM validations WHERE chatid = ? AND punid = ?''', (message.chat.id, quote.strip())).fetchone()
-            bot.reply_to(message, 'Gracias por votar a la rima ' + quote.strip() + '. Puntuación actual: ' + str(answer[0]))
+            bot.reply_to(message, 'Gracias por secundar a la rima ' + quote.strip() + '. Puntuación actual: ' + str(answer[0]))
     db.close()
     return
 
 
-@bot.message_handler(commands=['punban'])
+@bot.message_handler(commands=['rechazar'])
 def ban(message):
     global triggers
     global punsdb
-    quote = message.text.replace('/punban', '').strip()
+    quote = message.text.replace('/rechazar', '').strip()
     if quote == '':
-        bot.reply_to(message, 'Uuid no encontrado o sintaxis incorrecta: \"/punban \"pun uuid\"')
+        bot.reply_to(message, 'UUID no encontrado o sintaxis incorrecta: \"/rechazar \"UUID\"')
         return
     db = sqlite3.connect(punsdb)
     cursor = db.cursor()
@@ -220,28 +224,28 @@ def ban(message):
     else:
         answer = cursor.execute('''SELECT count(punid) FROM validations WHERE chatid = ? AND punid = ? AND userid = ? and karma = -1''', (message.chat.id, quote.strip(), message.from_user.id)).fetchone()
         if answer[0] >= 1:
-            bot.reply_to(message, 'Ya has votado -1 a la rima ' + quote + '. Solo se permite un voto -1 por usuario.')
+            bot.reply_to(message, 'Ya has rechazado la rima ' + quote + '. Solo se permite hacerlo una vez por usuario.')
         else:
             cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,-1)''', (quote.strip(), message.chat.id, message.from_user.id))
             db.commit()
             answer = cursor.execute('''SELECT SUM(karma) FROM validations WHERE chatid = ? AND punid = ?''', (message.chat.id, quote.strip())).fetchone()
-            bot.reply_to(message, 'Gracias por votar a la rima ' + quote.strip() + '. Puntuación actual: ' + str(answer[0]))
+            bot.reply_to(message, 'Gracias por rechazar la rima ' + quote.strip() + '. Puntuación actual: ' + str(answer[0]))
     db.close()
     return
 
 
-@bot.message_handler(commands=['punadd'])
+@bot.message_handler(commands=['agregar'])
 def add(message):
     global triggers
     global punsdb
-    quote = message.text.replace('/punadd', '')
+    quote = message.text.replace('/agregar', '')
     if quote == '' or len(quote.split('|')) != 2:
-        bot.reply_to(message, 'Uuid no encontrado o sintaxis incorrecta: \"/punadd \"pun trigger\"|\"pun\"')
+        bot.reply_to(message, 'UUID no encontrado o sintaxis incorrecta: \"/agregar \"texto_a_rimar\"|\"contestacion\"')
         return
     trigger = quote.split('|')[0].strip()
     for character in trigger:
         if character not in allowed_chars_triggers:
-            bot.reply_to(message, 'Caracter invalido encontrado ' + character + '. Solo se permiten letras y/o numeros')
+            bot.reply_to(message, 'Caracter invalido encontrado ' + character + '. Solo se permiten letras y/o numeros.')
             return
     if not is_valid_regex(trigger):
         bot.reply_to(message, 'No es una expresion regex valida: ' + trigger)
@@ -252,104 +256,95 @@ def add(message):
     answer = cursor.execute('''SELECT count(trigger) FROM puns WHERE trigger = ? AND chatid = ? AND pun = ?''', (trigger, message.chat.id, pun)).fetchone()
     db.commit()
     if answer[0] != 0:
-        bot.reply_to(message, 'A trigger with this pun already exists')
+        bot.reply_to(message, 'Ya existe una rima con ese texto.')
     else:
         punid = uuid.uuid4()
         cursor.execute('''INSERT INTO puns(uuid,chatid,trigger,pun) VALUES(?,?,?,?)''', (str(punid), message.chat.id, trigger.decode('utf8'), pun.decode('utf8')))
         cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,1)''', (str(punid), message.chat.id, message.from_user.id))
         db.commit()
         if bot.get_chat_members_count(message.chat.id) >= required_validations:
-            bot.reply_to(message, 'Pun ' + str(punid) + ' added to your channel. It have to be approved by ' + str(required_validations) + ' different people to be enabled on this chat')
+            bot.reply_to(message, 'Rima ' + str(punid) + ' agregada al canal. Debe ser secundada por al menos ' + str(required_validations) + ' personas diferentes para activarla.')
         else:
-            bot.reply_to(message, 'Pun ' + str(punid) + ' added to your channel. Positive karma is required to enable pun on this chat')
+            bot.reply_to(message, 'Rima ' + str(punid) + ' agregada al canal. Debe estar más secundada que rechazada para activarla.')
         print "Pun \"%s\" with trigger \"%s\" added to channel %s" % (pun, trigger, message.chat.id)
     db.close()
     return
 
 
-@bot.message_handler(commands=['pundel'])
+@bot.message_handler(commands=['borrar'])
 def delete(message):
     global triggers
     global punsdb
-    quote = message.text.replace('/pundel', '').strip()
+    quote = message.text.replace('/borrar', '').strip()
     if quote == '':
-        bot.reply_to(message, 'Missing pun uuid to remove or invalid syntax: \"/pundel \"pun uuid\"')
+        bot.reply_to(message, 'UUID no encontrado o sintaxis incorrecta: \"/borrar \"texto_a_rimar\"|\"contestacion\"')
         return
     db = sqlite3.connect(punsdb)
     cursor = db.cursor()
     answer = cursor.execute('''SELECT count(uuid) FROM puns WHERE chatid = ? AND uuid = ?''', (message.chat.id, quote,)).fetchone()
     db.commit()
     if answer[0] != 1:
-        bot.reply_to(message, 'UUID ' + quote + ' not found')
+        bot.reply_to(message, 'UUID ' + quote + ' no encontrado')
     else:
         cursor.execute('''DELETE FROM puns WHERE chatid = ? and uuid = ?''', (message.chat.id, quote))
-        bot.reply_to(message, 'Pun deleted from your channel')
+        bot.reply_to(message, 'Rima borrada del canal.')
         db.commit()
         print "Pun with UUID \"%s\" deleted from channel %s" % (quote, message.chat.id)
     db.close()
     return
 
 
-@bot.message_handler(commands=['punsilence'])
+@bot.message_handler(commands=['silenciar'])
 def silence(message):
-    global punsdb
-    quote = message.text.replace('/punsilence', '').strip()
-    if quote == '' or not quote.isdigit():
-        bot.reply_to(message, 'Missing time to silence or invalid syntax: \"/punsilence "time in minutes"')
-        return
-    if int(quote) > 60 or not quote.isdigit():
-        bot.reply_to(message, 'Disabling PunsBot for more than an hour is not funny 😢')
-        return
-    chatoptions = load_chat_options(message.chat.id)
-    if chatoptions['silence'] is None or int(chatoptions['silence']) <= int(time.time()):
-        chatoptions['silence'] = 60 * int(quote) + int(time.time())
-    else:
-        if int(chatoptions['silence']) + 60 * int(quote) - int(time.time()) >= 3600:
-            bot.reply_to(message, 'Disabling PunsBot for more than an hour is not funny 😢')
-            return
-        else:
-            chatoptions['silence'] = 60 * int(quote) + int(chatoptions['silence'])
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    keyboard.row(
+        telebot.types.InlineKeyboardButton('1 min.', callback_data='silence-1'),
+        telebot.types.InlineKeyboardButton('10 min.', callback_data='silence-10'),
+        telebot.types.InlineKeyboardButton('30 min.', callback_data='silence-30'),
+        telebot.types.InlineKeyboardButton('60 min.', callback_data='silence-60'),
+    )
+    bot.reply_to(message, 'Vaya vaya, alguien se ha mosqueado. Cuánto tiempo quieres dejarme sin hablar?', reply_markup=keyboard)
+
+
+def silence_callback(query):
+    [action, silence_minutes] = query.data.split('-')
+    chatoptions = load_chat_options(query.message.chat.id)
+    chatoptions['silence'] = 60 * int(silence_minutes) + int(time.time())
     set_chat_options(chatoptions)
-    bot.reply_to(message, 'PunsBot will be muted until ' + time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(chatoptions['silence'])))
+    bot.reply_to(query.message.reply_to_message, 'Ok cobarde, estaré callado hasta el ' + time.strftime('%d-%m-%Y a las %H:%M:%S.', time.localtime(chatoptions['silence'])))
 
 
-@bot.message_handler(commands=['punset'])
+@bot.message_handler(commands=['ajustar'])
 def set(message):
-    quote = message.text.replace('/punset', '').strip()
-    if quote == '' or int(quote) > 100 or int(quote) < 0 or not quote.isdigit():
-        bot.reply_to(message, 'Missing probability, out of range or invalid syntax: \"/punset "probability (1-100)"')
-        return
-    elif quote == '0':
-        bot.reply_to(message, 'Probability cannot be 0, to disable punsbot during a period of time, use /punsilence"')
-        return
-    chatoptions = load_chat_options(message.chat.id)
-    chatoptions['efectivity'] = int(quote)
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    keyboard.row(telebot.types.InlineKeyboardButton('Casi ninguna', callback_data='set-10-casi ninguna de'),)
+    keyboard.row(telebot.types.InlineKeyboardButton('Algunas', callback_data='set-25-algunas de'),)
+    keyboard.row(telebot.types.InlineKeyboardButton('La mitad', callback_data='set-50-la mitad de'),)
+    keyboard.row(telebot.types.InlineKeyboardButton('Muchas', callback_data='set-75-muchas de'),)
+    keyboard.row(telebot.types.InlineKeyboardButton('Todas', callback_data='set-100-todas'),)
+    bot.reply_to(message, 'Algo me dice que no me estoy comportando bien. Cuánto quieres que conteste con rimas?', reply_markup=keyboard)
+
+
+def set_callback(query):
+    [action, set_value, set_text] = query.data.split('-')
+    chatoptions = load_chat_options(query.message.chat.id)
+    chatoptions['efectivity'] = int(set_value)
     set_chat_options(chatoptions)
-    bot.reply_to(message, 'PunsBot will detect puns ' + quote + '% of the times')
+    bot.reply_to(query.message.reply_to_message, '''Okay, comprendido. Contestare a %s las rimas a partir de ahora.''' %(set_text))
 
 
-@bot.message_handler(commands=['list', 'punlist', 'punslist'])
+@bot.message_handler(commands=['listar'])
 def list(message):
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.row(
         telebot.types.InlineKeyboardButton('Globales', callback_data='list-global-0'),
         telebot.types.InlineKeyboardButton('Locales', callback_data='list-local-0')
     )
-    bot.send_message(message.chat.id, 'Elige qué rimas quieres ver:', reply_markup=keyboard)
+    bot.reply_to(message, 'Elige qué rimas quieres ver:', reply_markup=keyboard)
 
-
-@bot.callback_query_handler(func=lambda call: True)
-def iq_callback(query):
-   data = query.data
-   if data.startswith('list-'):
-       list_callback(query)
-   elif data.startswith('cancel'):
-       bot.answer_callback_query(query.id)
-       bot.send_message(query.message.chat.id, 'Ok, cancelando.')
-   
 
 def list_callback(query):
-    index = "| uuid | status (karma) | trigger | pun\n"
+    index = "| UUID | Estado (karma) | Rima | Contestacion\n"
     puns_list = ""
 
     [query_verb, query_scope, query_offset] = query.data.split('-')
@@ -361,22 +356,22 @@ def list_callback(query):
         answer = cursor.execute('''SELECT * from puns WHERE chatid = 0 LIMIT ? OFFSET ?''', (default_listing, query_offset,)).fetchall()
         db.commit()
         for i in answer:
-            puns_list += "| default pun | always enabled | " + str(i[2]) + " | " + str(i[3]) + "\n"
+            puns_list += "| - | Activa | " + str(i[2]) + " | " + str(i[3]) + "\n"
     elif (query.data.startswith("list-local")):
-        answer = cursor.execute('''SELECT * from puns WHERE chatid = ? LIMIT ? OFFSET ?''', (default_listing, query.message.chat.id, query_offset,)).fetchall()
+        answer = cursor.execute('''SELECT * from puns WHERE chatid = ? LIMIT ? OFFSET ?''', (query.message.chat.id, default_listing, query_offset,)).fetchall()
         db.commit()
         for i in answer:
             validations = cursor.execute('''SELECT SUM(validations.karma) FROM puns,validations WHERE puns.chatid = ? AND puns.uuid = ? AND puns.uuid == validations.punid AND puns.chatid = validations.chatid''', (query.message.chat.id, i[0],)).fetchone()
             if bot.get_chat_members_count(query.message.chat.id) >= required_validations:
                 if validations[0] >= required_validations:
-                    puns_list += "| " + str(i[0]) + " | enabled (" + str(validations[0]) + "/" + str(required_validations) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
+                    puns_list += "| " + str(i[0]) + " | Activa (" + str(validations[0]) + "/" + str(required_validations) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
                 else:
-                    puns_list += "| " + str(i[0]) + " | disabled (" + str(validations[0]) + "/" + str(required_validations) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
+                    puns_list += "| " + str(i[0]) + " | Inactiva (" + str(validations[0]) + "/" + str(required_validations) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
             else:
                 if validations[0] > 0:
-                    puns_list += "| " + str(i[0]) + " | enabled (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
+                    puns_list += "| " + str(i[0]) + " | Activa (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
                 else:
-                    puns_list += "| " + str(i[0]) + " | disabled (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
+                    puns_list += "| " + str(i[0]) + " | Inactiva (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
     db.close()
 
     bot.answer_callback_query(query.id)
@@ -384,7 +379,7 @@ def list_callback(query):
     if len(answer) == default_listing:
         keyboard = telebot.types.InlineKeyboardMarkup()
         keyboard.row(
-            telebot.types.InlineKeyboardButton('Sí', callback_data='-'.join([query_verb, query_scope, str(int(query_offset) + default_listing)])),
+            telebot.types.InlineKeyboardButton('Si', callback_data='-'.join([query_verb, query_scope, str(int(query_offset) + default_listing)])),
             telebot.types.InlineKeyboardButton('No', callback_data='cancel')
         )
         bot.send_message(query.message.chat.id, 'Quieres ver más?', reply_markup=keyboard)
@@ -394,7 +389,7 @@ def list_callback(query):
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "Lets do some pun jokes, use /punshelp for help")
+    bot.reply_to(message, "Hagamos unas rimas. Usa /ayuda para saber cómo va esto.")
 
 
 @bot.message_handler(func=lambda m: True)
@@ -404,6 +399,21 @@ def echo_all(message):
         if rima is not None:
             bot.reply_to(message, rima)
 
+
+@bot.callback_query_handler(func=lambda call: True)
+def iq_callback(query):
+   data = query.data
+   bot.delete_message(query.message.chat.id, query.message.message_id)
+   if data.startswith('list-'):
+       list_callback(query)
+   if data.startswith('silence-'):
+       silence_callback(query)
+   if data.startswith('set-'):
+       set_callback(query)
+   elif data.startswith('cancel'):
+       bot.answer_callback_query(query.id)
+       bot.send_message(query.message.chat.id, 'Ok, cancelando. Vuelve cuando quieras.')
+   
 
 punsdb = os.path.expanduser(os.environ['DBLOCATION'])
 db_setup(dbfile=punsdb)
