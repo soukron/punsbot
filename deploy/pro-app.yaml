@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: punsbot-pro
+  namespace: argocd
+spec:
+  destination:
+    namespace: punsbot-pro
+    server: 'https://kubernetes.default.svc'
+  source:
+    path: deploy/pro
+    repoURL: 'https://github.com/soukron/punsbot'
+    targetRevision: argo
+  project: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
