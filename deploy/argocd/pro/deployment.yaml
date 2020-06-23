@@ -27,6 +27,7 @@ spec:
         - name: DBLOCATION
           value: /var/punsdb/punsdb.db
         image: quay.io/soukron/punsbot:latest
+        imagePullPolicy: Always
         name: punsbot
         resources:
           limits:
@@ -34,7 +35,6 @@ spec:
         volumeMounts:
         - mountPath: /var/punsdb
           name: database-mount
-      imagePullPolicy: Always
       volumes:
       - name: database-mount
         persistentVolumeClaim:
