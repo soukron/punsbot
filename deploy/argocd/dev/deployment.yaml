@@ -31,7 +31,7 @@ spec:
         name: punsbot
         resources:
           limits:
-            memory: 512Mi
+            memory: 128Mi
         volumeMounts:
         - mountPath: /var/punsdb
           name: database-mount
