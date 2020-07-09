@@ -15,7 +15,7 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.8.0-beta1"
+version = "0.8.0-6375c1c"
 required_validations = 5
 default_listing = 10
 
@@ -172,7 +172,7 @@ def help(message):
     /ajustar - Ajustar la probabilidad de rimar a los mensajes
     /help o /ayuda - Mostar esta ayuda
 
-⚙ Configuración dctual
+⚙ Configuración actual
   - Rimas silenciadas en este canal hasta: %s.
   - Probabilidad de contestar a una rima: %s%%.
   - %s.
@@ -180,6 +180,12 @@ def help(message):
 Version: %s
     ''' % (silence_until(message.chat.id), efectivity(message.chat.id), karma_message, version)
     bot.reply_to(message, helpmessage)
+
+
+@bot.message_handler(commands=['punshelp', 'punapprove', 'punban', 'punadd', 'pundel', 'punsilence', 'punset', 'punlist'])
+def deprecated(message):
+    command = message.text.split(' ')[0]
+    bot.reply_to(message, 'El comando %s está en desuso. Comprueba los nuevos comandos en la /ayuda.' % (command))
 
 
 @bot.message_handler(commands=['secundar'])
@@ -300,6 +306,8 @@ def silence(message):
     keyboard.row(
         telebot.types.InlineKeyboardButton('1 min.', callback_data='silence-1'),
         telebot.types.InlineKeyboardButton('10 min.', callback_data='silence-10'),
+    )
+    keyboard.row(
         telebot.types.InlineKeyboardButton('30 min.', callback_data='silence-30'),
         telebot.types.InlineKeyboardButton('60 min.', callback_data='silence-60'),
     )
@@ -317,10 +325,14 @@ def silence_callback(query):
 @bot.message_handler(commands=['ajustar'])
 def set(message):
     keyboard = telebot.types.InlineKeyboardMarkup()
-    keyboard.row(telebot.types.InlineKeyboardButton('Casi ninguna', callback_data='set-10-casi ninguna de'),)
-    keyboard.row(telebot.types.InlineKeyboardButton('Algunas', callback_data='set-25-algunas de'),)
-    keyboard.row(telebot.types.InlineKeyboardButton('La mitad', callback_data='set-50-la mitad de'),)
-    keyboard.row(telebot.types.InlineKeyboardButton('Muchas', callback_data='set-75-muchas de'),)
+    keyboard.row(
+        telebot.types.InlineKeyboardButton('Casi ninguna', callback_data='set-10-casi ninguna de'),
+        telebot.types.InlineKeyboardButton('Algunas', callback_data='set-25-algunas de'),
+    )
+    keyboard.row(
+        telebot.types.InlineKeyboardButton('La mitad', callback_data='set-50-la mitad de'),
+        telebot.types.InlineKeyboardButton('Muchas', callback_data='set-75-muchas de'),
+    )
     keyboard.row(telebot.types.InlineKeyboardButton('Todas', callback_data='set-100-todas'),)
     bot.reply_to(message, 'Algo me dice que no me estoy comportando bien. Cuánto quieres que conteste con rimas?', reply_markup=keyboard)
 
@@ -402,20 +414,21 @@ def echo_all(message):
 
 @bot.callback_query_handler(func=lambda call: True)
 def iq_callback(query):
-   data = query.data
-   bot.delete_message(query.message.chat.id, query.message.message_id)
-   if data.startswith('list-'):
-       list_callback(query)
-   if data.startswith('silence-'):
-       silence_callback(query)
-   if data.startswith('set-'):
-       set_callback(query)
-   elif data.startswith('cancel'):
-       bot.answer_callback_query(query.id)
-       bot.send_message(query.message.chat.id, 'Ok, cancelando. Vuelve cuando quieras.')
-   
+    data = query.data
+    bot.delete_message(query.message.chat.id, query.message.message_id)
+    if data.startswith('list-'):
+        list_callback(query)
+    if data.startswith('silence-'):
+        silence_callback(query)
+    if data.startswith('set-'):
+        set_callback(query)
+    elif data.startswith('cancel'):
+        bot.answer_callback_query(query.id)
+        bot.send_message(query.message.chat.id, 'Ok, cancelando. Vuelve cuando quieras.')
+
 
 punsdb = os.path.expanduser(os.environ['DBLOCATION'])
 db_setup(dbfile=punsdb)
 print "PunsBot %s ready for puns!" % (version)
 bot.polling(none_stop=True)
+
