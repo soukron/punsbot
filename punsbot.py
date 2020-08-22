@@ -15,8 +15,7 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.8.0-6375c1c"
-required_validations = 5
+version = "0.9.0"
 default_listing = 10
 
 if 'TOKEN' not in os.environ:
@@ -149,7 +148,7 @@ def find_pun(message="", dbfile='puns.db'):
                     for j in matches:
                         if j[1].split()[-1] != last_clean:
                             enabled = cursor.execute('''SELECT SUM(karma) from validations where punid = ? AND chatid = ?''', (j[0], message.chat.id)).fetchone()
-                            if j[2] == 0 or enabled[0] >= required_validations or (bot.get_chat_members_count(message.chat.id) < required_validations and enabled[0] > 0):
+                            if j[2] == 0 or enabled[0] > 0: 
                                 answer_list.append(j[1])
         db.close()
         return None if answer_list == [] else random.choice(answer_list)
@@ -157,10 +156,7 @@ def find_pun(message="", dbfile='puns.db'):
 
 @bot.message_handler(commands=['ayuda', 'help'])
 def help(message):
-    if bot.get_chat_members_count(message.chat.id) >= required_validations:
-        karma_message='''Las rimas necesitan más de %s puntos de karma para estar activas en este canal''' % (required_validations)
-    else:
-        karma_message='''Las rimas necesitan karma positivo para estar activas en este canal'''
+    karma_message='''Las rimas necesitan karma positivo para estar activas en este canal'''
 
     helpmessage = '''ℹ Estos son los comandos disponibles:
     /agregar - Agregar una rima
@@ -268,10 +264,7 @@ def add(message):
         cursor.execute('''INSERT INTO puns(uuid,chatid,trigger,pun) VALUES(?,?,?,?)''', (str(punid), message.chat.id, trigger.decode('utf8'), pun.decode('utf8')))
         cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,1)''', (str(punid), message.chat.id, message.from_user.id))
         db.commit()
-        if bot.get_chat_members_count(message.chat.id) >= required_validations:
-            bot.reply_to(message, 'Rima ' + str(punid) + ' agregada al canal. Debe ser secundada por al menos ' + str(required_validations) + ' personas diferentes para activarla.')
-        else:
-            bot.reply_to(message, 'Rima ' + str(punid) + ' agregada al canal. Debe estar más secundada que rechazada para activarla.')
+        bot.reply_to(message, 'Rima ' + str(punid) + ' agregada al canal. Debe estar más secundada que rechazada para que funcione.')
         print "Pun \"%s\" with trigger \"%s\" added to channel %s" % (pun, trigger, message.chat.id)
     db.close()
     return
@@ -374,16 +367,10 @@ def list_callback(query):
         db.commit()
         for i in answer:
             validations = cursor.execute('''SELECT SUM(validations.karma) FROM puns,validations WHERE puns.chatid = ? AND puns.uuid = ? AND puns.uuid == validations.punid AND puns.chatid = validations.chatid''', (query.message.chat.id, i[0],)).fetchone()
-            if bot.get_chat_members_count(query.message.chat.id) >= required_validations:
-                if validations[0] >= required_validations:
-                    puns_list += "| " + str(i[0]) + " | Activa (" + str(validations[0]) + "/" + str(required_validations) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
-                else:
-                    puns_list += "| " + str(i[0]) + " | Inactiva (" + str(validations[0]) + "/" + str(required_validations) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
+            if validations[0] > 0:
+                puns_list += "| " + str(i[0]) + " | Activa (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
             else:
-                if validations[0] > 0:
-                    puns_list += "| " + str(i[0]) + " | Activa (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
-                else:
-                    puns_list += "| " + str(i[0]) + " | Inactiva (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
+                puns_list += "| " + str(i[0]) + " | Inactiva (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
     db.close()
 
     bot.answer_callback_query(query.id)
