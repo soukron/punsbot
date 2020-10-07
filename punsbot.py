@@ -15,7 +15,7 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.9.0"
+version = "0.9.1"
 default_listing = 10
 
 if 'TOKEN' not in os.environ:
@@ -154,27 +154,31 @@ def find_pun(message="", dbfile='puns.db'):
         return None if answer_list == [] else random.choice(answer_list)
 
 
+@bot.message_handler(commands=['configuracion'])
+def configuration(message):
+    helpmessage = '''Esta es mi configuración actual:
+⏲ ️*Rimas silenciadas hasta:* %s.
+🎲 *Probabilidad de contestar:* %s%%.
+
+Si algo no te parece bien, puedes usar los comandos /silenciar y /ajustar para cambiarlo.''' % (silence_until(message.chat.id), efectivity(message.chat.id))
+    bot.reply_to(message, helpmessage, parse_mode='Markdown')
+
+
 @bot.message_handler(commands=['ayuda', 'help'])
 def help(message):
-    karma_message='''Las rimas necesitan karma positivo para estar activas en este canal'''
-
     helpmessage = '''ℹ Estos son los comandos disponibles:
-    /agregar - Agregar una rima
-    /borrar - Borrar una rima
-    /listar - Lista todas las rimas para este chat
-    /secundar - Dar karma a una rima
-    /rechazar - Dar o quitar karma a una rima
-    /silenciar - Silenciar rimas durante un periodo de tiempo
-    /ajustar - Ajustar la probabilidad de rimar a los mensajes
-    /help o /ayuda - Mostar esta ayuda
-
-⚙ Configuración actual
-  - Rimas silenciadas en este canal hasta: %s.
-  - Probabilidad de contestar a una rima: %s%%.
-  - %s.
+/agregar - Agregar una rima
+/borrar - Borrar una rima
+/configuracion - Ver configuracion para el canal actual
+/listar - Lista todas las rimas para este chat
+/secundar - Dar karma a una rima
+/rechazar - Dar o quitar karma a una rima
+/silenciar - Silenciar rimas durante un periodo de tiempo
+/ajustar - Ajustar la probabilidad de rimar a los mensajes
+/help o /ayuda - Mostar esta ayuda
 
 Version: %s
-    ''' % (silence_until(message.chat.id), efectivity(message.chat.id), karma_message, version)
+    ''' % (version)
     bot.reply_to(message, helpmessage)
 
 
