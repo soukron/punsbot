@@ -9,13 +9,14 @@ import re
 import sys
 import random
 import time
+from telebot import types
 
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.9.2"
+version = "0.9.3"
 default_listing = 10
 
 if 'TOKEN' not in os.environ:
@@ -66,7 +67,7 @@ def db_setup(dbfile='puns.db'):
     db = sqlite3.connect(dbfile)
     cursor = db.cursor()
     cursor.execute('CREATE TABLE IF NOT EXISTS puns (uuid text, chatid int, trigger text, pun text)')
-    cursor.execute('CREATE TABLE IF NOT EXISTS validations (punid text, chatid int, userid text, karma int)')
+    cursor.execute('CREATE TABLE IF NOT EXISTS validations (punid text, chatid int, userid text, karma int, UNIQUE(punid, chatid, userid))')
     cursor.execute('CREATE TABLE IF NOT EXISTS chatoptions (chatid int, silence int, efectivity int, unique (chatid))')
     db.commit()
     db.close()
@@ -182,9 +183,7 @@ def help(message):
 /agregar - Agregar una rima
 /borrar - Borrar una rima
 /configuracion - Ver configuracion para el canal actual
-/listar - Lista todas las rimas para este chat
-/secundar - Dar karma a una rima
-/rechazar - Dar o quitar karma a una rima
+/listar - Lista todas las rimas para este chat para poder votarlas
 /silenciar - Silenciar rimas durante un periodo de tiempo
 /ajustar - Ajustar la probabilidad de rimar a los mensajes
 /help o /ayuda - Mostar esta ayuda
@@ -194,62 +193,26 @@ Version: %s
     bot.reply_to(message, helpmessage)
 
 
-@bot.message_handler(commands=['punshelp', 'punapprove', 'punban', 'punadd', 'pundel', 'punsilence', 'punset', 'punlist'])
+@bot.message_handler(commands=['punshelp', 'punapprove', 'punban', 'punadd', 'pundel', 'punsilence', 'punset', 'punlist', 'secundar', 'rechazar'])
 def deprecated(message):
     command = message.text.split(' ')[0]
     bot.reply_to(message, 'El comando %s está en desuso. Comprueba los nuevos comandos en la /ayuda.' % (command))
 
 
-@bot.message_handler(commands=['secundar'])
-def approve(message):
-    global triggers
+def karma_callback(query):
     global punsdb
-    quote = message.text.replace('/secundar', '').strip()
-    if quote == '':
-        bot.reply_to(message, 'UUID no encontrado o sintaxis incorrecta: \"/secundar \"UUID\"')
-        return
     db = sqlite3.connect(punsdb)
     cursor = db.cursor()
-    answer = cursor.execute('''SELECT count(uuid) FROM puns WHERE chatid = ? AND uuid = ?''', (message.chat.id, quote.strip(),)).fetchone()
-    if answer[0] != 1:
-        bot.reply_to(message, 'UUID ' + quote.strip() + ' not found')
-    else:
-        answer = cursor.execute('''SELECT count(punid) FROM validations WHERE chatid = ? AND punid = ? AND userid = ? and karma = 1''', (message.chat.id, quote.strip(), message.from_user.id)).fetchone()
-        if answer[0] >= 1:
-            bot.reply_to(message, 'Ya has secundado a la rima ' + quote + '. Solo se permite hacerlo una vez por usuario.')
-        else:
-            cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,1)''', (quote.strip(), message.chat.id, message.from_user.id))
-            db.commit()
-            answer = cursor.execute('''SELECT SUM(karma) FROM validations WHERE chatid = ? AND punid = ?''', (message.chat.id, quote.strip())).fetchone()
-            bot.reply_to(message, 'Gracias por secundar a la rima ' + quote.strip() + '. Puntuación actual: ' + str(answer[0]))
-    db.close()
-    return
 
+    action = query.data[6:9]
+    uuid = query.data[10:]
 
-@bot.message_handler(commands=['rechazar'])
-def ban(message):
-    global triggers
-    global punsdb
-    quote = message.text.replace('/rechazar', '').strip()
-    if quote == '':
-        bot.reply_to(message, 'UUID no encontrado o sintaxis incorrecta: \"/rechazar \"UUID\"')
-        return
-    db = sqlite3.connect(punsdb)
-    cursor = db.cursor()
-    answer = cursor.execute('''SELECT count(uuid) FROM puns WHERE chatid = ? AND uuid = ?''', (message.chat.id, quote.strip(),)).fetchone()
-    if answer[0] != 1:
-        bot.reply_to(message, 'UUID ' + quote.strip() + ' not found')
-    else:
-        answer = cursor.execute('''SELECT count(punid) FROM validations WHERE chatid = ? AND punid = ? AND userid = ? and karma = -1''', (message.chat.id, quote.strip(), message.from_user.id)).fetchone()
-        if answer[0] >= 1:
-            bot.reply_to(message, 'Ya has rechazado la rima ' + quote + '. Solo se permite hacerlo una vez por usuario.')
-        else:
-            cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,-1)''', (quote.strip(), message.chat.id, message.from_user.id))
-            db.commit()
-            answer = cursor.execute('''SELECT SUM(karma) FROM validations WHERE chatid = ? AND punid = ?''', (message.chat.id, quote.strip())).fetchone()
-            bot.reply_to(message, 'Gracias por rechazar la rima ' + quote.strip() + '. Puntuación actual: ' + str(answer[0]))
+    cursor.execute('''REPLACE INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,?)''', (uuid, query.message.chat.id, query.message.from_user.id, 1 if action == "add" else -1))
+    db.commit()
+    answer = cursor.execute('''SELECT SUM(karma) FROM validations WHERE chatid = ? AND punid = ?''', (query.message.chat.id, uuid)).fetchone()
+    bot.reply_to(query.message, 'Tu acción ha sido registrada. Puntuación actual: *' + str(answer[0]) + '*', parse_mode='Markdown')
+
     db.close()
-    return
 
 
 @bot.message_handler(commands=['agregar'])
@@ -280,7 +243,7 @@ def add(message):
         cursor.execute('''INSERT INTO puns(uuid,chatid,trigger,pun) VALUES(?,?,?,?)''', (str(punid), message.chat.id, trigger.decode('utf8'), pun.decode('utf8')))
         cursor.execute('''INSERT INTO validations(punid,chatid,userid,karma) VALUES(?,?,?,1)''', (str(punid), message.chat.id, message.from_user.id))
         db.commit()
-        bot.reply_to(message, 'Rima ' + str(punid) + ' agregada al canal. Debe estar más secundada que rechazada para que funcione.')
+        bot.reply_to(message, 'Rima agregada al canal. Debe tener karma positivo para que funcione.')
         print "Pun \"%s\" with trigger \"%s\" added to channel %s" % (pun, trigger, message.chat.id)
     db.close()
     return
@@ -354,14 +317,13 @@ def set_callback(query):
     bot.reply_to(query.message.reply_to_message, '''Okay, comprendido. Contestare a %s las rimas a partir de ahora.''' %(set_text))
 
 
-@bot.message_handler(commands=['listar'])
+@bot.message_handler(commands=['listar', 'secundar', 'rechazar', 'votar'])
 def list(message):
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.row(
-        telebot.types.InlineKeyboardButton('Globales', callback_data='list-global-0'),
-        telebot.types.InlineKeyboardButton('Locales', callback_data='list-local-0')
+        telebot.types.InlineKeyboardButton('Comenzar', callback_data='list-local-0')
     )
-    bot.reply_to(message, 'Elige qué rimas quieres ver:', reply_markup=keyboard)
+    bot.reply_to(message, 'Pulsa comenzar para ver la lista de rimas de este canal.', reply_markup=keyboard)
 
 
 def list_callback(query):
@@ -383,14 +345,14 @@ def list_callback(query):
         db.commit()
         for i in answer:
             validations = cursor.execute('''SELECT SUM(validations.karma) FROM puns,validations WHERE puns.chatid = ? AND puns.uuid = ? AND puns.uuid == validations.punid AND puns.chatid = validations.chatid''', (query.message.chat.id, i[0],)).fetchone()
-            if validations[0] > 0:
-                puns_list += "| " + str(i[0]) + " | Activa (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
-            else:
-                puns_list += "| " + str(i[0]) + " | Inactiva (" + str(validations[0]) + ") | " + str(i[2]) + " | " + str(i[3]) + "\n"
+            keyboard = telebot.types.InlineKeyboardMarkup()
+            keyboard.row(
+                telebot.types.InlineKeyboardButton('👍 - Dar karma', callback_data='karma-add-' + str(i[0])),
+                telebot.types.InlineKeyboardButton('👎 - Quitar karma', callback_data='karma-rem-' + str(i[0]))
+            )
+            bot.send_message(query.message.chat.id, "*Texto*: %s\n*Rima*: %s\n*Karma:* %s (%s)" % (str(i[2]), str(i[3]), str(validations[0]), 'Activa' if validations[0]>0 else 'Inactiva'), parse_mode='Markdown', reply_markup=keyboard); 
     db.close()
 
-    bot.answer_callback_query(query.id)
-    bot.send_message(query.message.chat.id, index + puns_list)
     if len(answer) == default_listing:
         keyboard = telebot.types.InlineKeyboardMarkup()
         keyboard.row(
@@ -418,14 +380,19 @@ def echo_all(message):
 @bot.callback_query_handler(func=lambda call: True)
 def iq_callback(query):
     data = query.data
-    bot.delete_message(query.message.chat.id, query.message.message_id)
     if data.startswith('list-'):
+        bot.delete_message(query.message.chat.id, query.message.message_id)
         list_callback(query)
     if data.startswith('silence-'):
+        bot.delete_message(query.message.chat.id, query.message.message_id)
         silence_callback(query)
     if data.startswith('set-'):
+        bot.delete_message(query.message.chat.id, query.message.message_id)
         set_callback(query)
+    if data.startswith('karma-'):
+        karma_callback(query)
     elif data.startswith('cancel'):
+        bot.delete_message(query.message.chat.id, query.message.message_id)
         bot.answer_callback_query(query.id)
         bot.send_message(query.message.chat.id, 'Ok, cancelando. Vuelve cuando quieras.')
 
