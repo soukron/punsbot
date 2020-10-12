@@ -15,7 +15,7 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.9.1"
+version = "0.9.2"
 default_listing = 10
 
 if 'TOKEN' not in os.environ:
@@ -28,6 +28,7 @@ if 'DBLOCATION' not in os.environ:
 
 bot = telebot.TeleBot(os.environ['TOKEN'])
 bot.skip_pending = True
+
 
 def is_valid_regex(regexp=""):
     try:
@@ -113,6 +114,17 @@ def set_chat_options(chatoptions=""):
     db.close()
 
 
+def is_message_to_me(message):
+    if message.entities:
+        for entity in message.entities:
+            if message.text[entity.offset+1:entity.offset+1+entity.length] == bot.get_me().username: return True
+
+    if message.reply_to_message:
+        return message.reply_to_message.from_user.id == bot.get_me().id
+
+    return False
+
+
 def is_efective(chatid=""):
     global punsdb
     db = sqlite3.connect(punsdb)
@@ -157,7 +169,7 @@ def find_pun(message="", dbfile='puns.db'):
 @bot.message_handler(commands=['configuracion'])
 def configuration(message):
     helpmessage = '''Esta es mi configuración actual:
-⏲ ️*Rimas silenciadas hasta:* %s.
+⏲ *Rimas silenciadas hasta:* %s.
 🎲 *Probabilidad de contestar:* %s%%.
 
 Si algo no te parece bien, puedes usar los comandos /silenciar y /ajustar para cambiarlo.''' % (silence_until(message.chat.id), efectivity(message.chat.id))
@@ -397,7 +409,7 @@ def send_welcome(message):
 
 @bot.message_handler(func=lambda m: True)
 def echo_all(message):
-    if not is_chat_silenced(message=message, dbfile=punsdb) and is_efective(message.chat.id):
+    if is_message_to_me(message) or (not is_chat_silenced(message=message, dbfile=punsdb) and is_efective(message.chat.id)):
         rima = find_pun(message=message, dbfile=punsdb)
         if rima is not None:
             bot.reply_to(message, rima)
