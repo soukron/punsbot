@@ -16,8 +16,8 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.9.3"
-default_listing = 10
+version = "0.9.4"
+default_listing = 5
 
 if 'TOKEN' not in os.environ:
     print("missing TOKEN.Leaving...")
@@ -169,12 +169,17 @@ def find_pun(message="", dbfile='puns.db'):
 
 @bot.message_handler(commands=['configuracion'])
 def configuration(message):
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    keyboard.row(
+        telebot.types.InlineKeyboardButton('Silenciar rimas', callback_data='silence-0'),
+        telebot.types.InlineKeyboardButton('Ajustar probabilidad', callback_data='set-0-menu')
+    )
     helpmessage = '''Esta es mi configuración actual:
 ⏲ *Rimas silenciadas hasta:* %s.
 🎲 *Probabilidad de contestar:* %s%%.
 
-Si algo no te parece bien, puedes usar los comandos /silenciar y /ajustar para cambiarlo.''' % (silence_until(message.chat.id), efectivity(message.chat.id))
-    bot.reply_to(message, helpmessage, parse_mode='Markdown')
+Si algo no te parece bien, puedes usar ajustar los parametros a tu gusto.''' % (silence_until(message.chat.id), efectivity(message.chat.id))
+    bot.reply_to(message, helpmessage, parse_mode='Markdown', reply_markup=keyboard)
 
 
 @bot.message_handler(commands=['ayuda', 'help'])
@@ -184,8 +189,6 @@ def help(message):
 /borrar - Borrar una rima
 /configuracion - Ver configuracion para el canal actual
 /listar - Lista todas las rimas para este chat para poder votarlas
-/silenciar - Silenciar rimas durante un periodo de tiempo
-/ajustar - Ajustar la probabilidad de rimar a los mensajes
 /help o /ayuda - Mostar esta ayuda
 
 Version: %s
@@ -193,7 +196,7 @@ Version: %s
     bot.reply_to(message, helpmessage)
 
 
-@bot.message_handler(commands=['punshelp', 'punapprove', 'punban', 'punadd', 'pundel', 'punsilence', 'punset', 'punlist', 'secundar', 'rechazar'])
+@bot.message_handler(commands=['punshelp', 'punapprove', 'punban', 'punadd', 'pundel', 'punsilence', 'punset', 'punlist', 'secundar', 'rechazar', 'silenciar', 'ajustar'])
 def deprecated(message):
     command = message.text.split(' ')[0]
     bot.reply_to(message, 'El comando %s está en desuso. Comprueba los nuevos comandos en la /ayuda.' % (command))
@@ -272,49 +275,45 @@ def delete(message):
     return
 
 
-@bot.message_handler(commands=['silenciar'])
-def silence(message):
-    keyboard = telebot.types.InlineKeyboardMarkup()
-    keyboard.row(
-        telebot.types.InlineKeyboardButton('1 min.', callback_data='silence-1'),
-        telebot.types.InlineKeyboardButton('10 min.', callback_data='silence-10'),
-    )
-    keyboard.row(
-        telebot.types.InlineKeyboardButton('30 min.', callback_data='silence-30'),
-        telebot.types.InlineKeyboardButton('60 min.', callback_data='silence-60'),
-    )
-    bot.reply_to(message, 'Vaya vaya, alguien se ha mosqueado. Cuánto tiempo quieres dejarme sin hablar?', reply_markup=keyboard)
-
-
 def silence_callback(query):
     [action, silence_minutes] = query.data.split('-')
-    chatoptions = load_chat_options(query.message.chat.id)
-    chatoptions['silence'] = 60 * int(silence_minutes) + int(time.time())
-    set_chat_options(chatoptions)
-    bot.reply_to(query.message.reply_to_message, 'Ok cobarde, estaré callado hasta el ' + time.strftime('%d-%m-%Y a las %H:%M:%S.', time.localtime(chatoptions['silence'])))
-
-
-@bot.message_handler(commands=['ajustar'])
-def set(message):
-    keyboard = telebot.types.InlineKeyboardMarkup()
-    keyboard.row(
-        telebot.types.InlineKeyboardButton('Casi ninguna', callback_data='set-10-casi ninguna de'),
-        telebot.types.InlineKeyboardButton('Algunas', callback_data='set-25-algunas de'),
-    )
-    keyboard.row(
-        telebot.types.InlineKeyboardButton('La mitad', callback_data='set-50-la mitad de'),
-        telebot.types.InlineKeyboardButton('Muchas', callback_data='set-75-muchas de'),
-    )
-    keyboard.row(telebot.types.InlineKeyboardButton('Todas', callback_data='set-100-todas'),)
-    bot.reply_to(message, 'Algo me dice que no me estoy comportando bien. Cuánto quieres que conteste con rimas?', reply_markup=keyboard)
+    if silence_minutes == "0":
+        keyboard = telebot.types.InlineKeyboardMarkup()
+        keyboard.row(
+            telebot.types.InlineKeyboardButton('1 min.', callback_data='silence-1'),
+            telebot.types.InlineKeyboardButton('10 min.', callback_data='silence-10'),
+        )
+        keyboard.row(
+            telebot.types.InlineKeyboardButton('30 min.', callback_data='silence-30'),
+            telebot.types.InlineKeyboardButton('60 min.', callback_data='silence-60'),
+        )
+        bot.reply_to(query.message.reply_to_message, 'Vaya vaya, alguien se ha mosqueado. Cuánto tiempo quieres dejarme sin hablar?', reply_markup=keyboard)
+    else:
+        chatoptions = load_chat_options(query.message.chat.id)
+        chatoptions['silence'] = 60 * int(silence_minutes) + int(time.time())
+        set_chat_options(chatoptions)
+        bot.reply_to(query.message.reply_to_message, 'Ok cobarde, estaré callado hasta el ' + time.strftime('%d-%m-%Y a las %H:%M:%S.', time.localtime(chatoptions['silence'])))
 
 
 def set_callback(query):
     [action, set_value, set_text] = query.data.split('-')
-    chatoptions = load_chat_options(query.message.chat.id)
-    chatoptions['efectivity'] = int(set_value)
-    set_chat_options(chatoptions)
-    bot.reply_to(query.message.reply_to_message, '''Okay, comprendido. Contestare a %s las rimas a partir de ahora.''' %(set_text))
+    if set_value == "0":
+        keyboard = telebot.types.InlineKeyboardMarkup()
+        keyboard.row(
+            telebot.types.InlineKeyboardButton('Casi ninguna', callback_data='set-10-casi ninguna de'),
+            telebot.types.InlineKeyboardButton('Algunas', callback_data='set-25-algunas de'),
+        )
+        keyboard.row(
+            telebot.types.InlineKeyboardButton('La mitad', callback_data='set-50-la mitad de'),
+            telebot.types.InlineKeyboardButton('Muchas', callback_data='set-75-muchas de'),
+        )
+        keyboard.row(telebot.types.InlineKeyboardButton('Todas', callback_data='set-100-todas'),)
+        bot.reply_to(query.message.reply_to_message, 'Algo me dice que no me estoy comportando bien. Cuánto quieres que conteste con rimas?', reply_markup=keyboard)
+    else:
+        chatoptions = load_chat_options(query.message.chat.id)
+        chatoptions['efectivity'] = int(set_value)
+        set_chat_options(chatoptions)
+        bot.reply_to(query.message.reply_to_message, '''Okay, comprendido. Contestare a %s las rimas a partir de ahora.''' %(set_text))
 
 
 @bot.message_handler(commands=['listar', 'secundar', 'rechazar', 'votar'])
@@ -350,7 +349,7 @@ def list_callback(query):
                 telebot.types.InlineKeyboardButton('👍 - Dar karma', callback_data='karma-add-' + str(i[0])),
                 telebot.types.InlineKeyboardButton('👎 - Quitar karma', callback_data='karma-rem-' + str(i[0]))
             )
-            bot.send_message(query.message.chat.id, "*Texto*: %s\n*Rima*: %s\n*Karma:* %s (%s)" % (str(i[2]), str(i[3]), str(validations[0]), 'Activa' if validations[0]>0 else 'Inactiva'), parse_mode='Markdown', reply_markup=keyboard); 
+            bot.send_message(query.message.chat.id, "Texto: %s\nRima: %s\nActiva: %s - Karma: %s" % (str(i[2]), str(i[3]), 'Si' if validations[0]>0 else 'No', str(validations[0])), reply_markup=keyboard); 
     db.close()
 
     if len(answer) == default_listing:
