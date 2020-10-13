@@ -16,7 +16,7 @@ sys.setdefaultencoding('utf-8')
 
 allowed_chars_puns = string.ascii_letters + " " + string.digits + "áéíóúàèìòùäëïöü"
 allowed_chars_triggers = allowed_chars_puns + "^$.*+?(){}\\[]<>=-"
-version = "0.9.4"
+version = "0.9.5"
 default_listing = 5
 
 if 'TOKEN' not in os.environ:
@@ -171,6 +171,7 @@ def find_pun(message="", dbfile='puns.db'):
 def configuration(message):
     keyboard = telebot.types.InlineKeyboardMarkup()
     keyboard.row(
+        telebot.types.InlineKeyboardButton('Listar rimas', callback_data='list-local-0'),
         telebot.types.InlineKeyboardButton('Silenciar rimas', callback_data='silence-0'),
         telebot.types.InlineKeyboardButton('Ajustar probabilidad', callback_data='set-0-menu')
     )
@@ -187,8 +188,7 @@ def help(message):
     helpmessage = '''ℹ Estos son los comandos disponibles:
 /agregar - Agregar una rima
 /borrar - Borrar una rima
-/configuracion - Ver configuracion para el canal actual
-/listar - Lista todas las rimas para este chat para poder votarlas
+/configuracion - Ver las rimas y la configuracion
 /help o /ayuda - Mostar esta ayuda
 
 Version: %s
@@ -196,7 +196,7 @@ Version: %s
     bot.reply_to(message, helpmessage)
 
 
-@bot.message_handler(commands=['punshelp', 'punapprove', 'punban', 'punadd', 'pundel', 'punsilence', 'punset', 'punlist', 'secundar', 'rechazar', 'silenciar', 'ajustar'])
+@bot.message_handler(commands=['punshelp', 'punapprove', 'punban', 'punadd', 'pundel', 'punsilence', 'punset', 'punlist', 'secundar', 'rechazar', 'silenciar', 'ajustar', 'listar'])
 def deprecated(message):
     command = message.text.split(' ')[0]
     bot.reply_to(message, 'El comando %s está en desuso. Comprueba los nuevos comandos en la /ayuda.' % (command))
@@ -314,15 +314,6 @@ def set_callback(query):
         chatoptions['efectivity'] = int(set_value)
         set_chat_options(chatoptions)
         bot.reply_to(query.message.reply_to_message, '''Okay, comprendido. Contestare a %s las rimas a partir de ahora.''' %(set_text))
-
-
-@bot.message_handler(commands=['listar', 'secundar', 'rechazar', 'votar'])
-def list(message):
-    keyboard = telebot.types.InlineKeyboardMarkup()
-    keyboard.row(
-        telebot.types.InlineKeyboardButton('Comenzar', callback_data='list-local-0')
-    )
-    bot.reply_to(message, 'Pulsa comenzar para ver la lista de rimas de este canal.', reply_markup=keyboard)
 
 
 def list_callback(query):
